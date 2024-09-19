@@ -1,0 +1,102 @@
+function my_pmpro_after_change_membership_level_default_level($level_id, $user_id)
+{
+    
+    //level when paid membership expires/cancels
+    $cancel_level_id = 1;
+
+    //level when free membership expires/cancels
+    $expired_level_id = 9;
+    
+
+	//if we see this global set, then another gist is planning to give the user their level back
+	global $pmpro_next_payment_timestamp;
+	if(!empty($pmpro_next_payment_timestamp))
+		return;
+
+	//are they cancelling?
+	if($level_id == 0)
+	{
+		//check if they are cancelling from level $cancel_level_id
+		global $wpdb;
+		$last_level_id = $wpdb->get_var("SELECT membership_id FROM $wpdb->pmpro_memberships_users WHERE user_id = '" . $user_id . "' ORDER BY id DESC");
+		if($last_level_id == $cancel_level_id) {
+            
+            //remove from mailchimp support group mailings
+            /*
+			if ( function_exists( 'edsuk_member_cancel_hook' ) ) {
+			edsuk_member_cancel_hook($user_id);
+			}
+            */
+            //set new level as expired on website
+            $level = pmpro_getLevel($expired_level_id);
+            //set enddate if the level has one
+            if(!empty($level->expiration_number))
+            {
+                $custom_level = array(
+                    'user_id' => $user_id,
+                    'membership_id' => $expired_level_id,
+                    'code_id' => '',
+                    'initial_payment' => $level->initial_payment,
+                    'billing_amount' => $level->billing_amount,
+                    'cycle_number' => $level->cycle_number,
+                    'cycle_period' => $level->cycle_period,
+                    'billing_limit' => $level->billing_limit,
+                    'trial_amount' => $level->trial_amount,
+                    'trial_limit' => $level->trial_limit,
+                    'startdate' => "'" . current_time('mysql') . "'",
+                    'enddate' => date("Y-m-d", strtotime("+" . $level->expiration_number . " " . $level->expiration_period)),
+                );
+
+                pmpro_changeMembershipLevel($custom_level, $user_id);
+            }
+            else {
+                pmpro_changeMembershipLevel($expired_level_id, $user_id);
+            }
+			return;	//end
+		}
+		
+        	elseif($last_level_id == $expired_level_id) {
+            
+            //remove from mailchimp support group mailings
+		/*	if ( function_exists( 'edsuk_member_cancel_hook' ) ) {
+			edsuk_member_cancel_hook($user_id);
+			} */
+          
+			return;	//let them cancel
+		  }
+        
+        
+		//otherwise give them level $cancel_level_id instead
+$level = pmpro_getLevel($cancel_level_id);
+		
+//set enddate if the level has one
+if(!empty($level->expiration_number))
+{
+	$custom_level = array(
+		'user_id' => $user_id,
+		'membership_id' => $cancel_level_id,
+		'code_id' => '',
+		'initial_payment' => $level->initial_payment,
+		'billing_amount' => $level->billing_amount,
+		'cycle_number' => $level->cycle_number,
+		'cycle_period' => $level->cycle_period,
+		'billing_limit' => $level->billing_limit,
+		'trial_amount' => $level->trial_amount,
+		'trial_limit' => $level->trial_limit,
+		'startdate' => "'" . current_time('mysql') . "'",
+		'enddate' => date("Y-m-d", strtotime("+" . $level->expiration_number . " " . $level->expiration_period)),
+	);
+			
+	pmpro_changeMembershipLevel($custom_level, $user_id);
+}
+else
+	pmpro_changeMembershipLevel($cancel_level_id, $user_id);
+		
+		/*
+		if ( function_exists( 'rudr_user_register_hook' ) ) {
+			rudr_user_register_hook($user_id);
+			}
+        */    
+	}
+}
+add_action("pmpro_after_change_membership_level", "my_pmpro_after_change_membership_level_default_level", 10, 2);
